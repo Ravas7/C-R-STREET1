@@ -8,6 +8,9 @@ export function Admin() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
   // ---------------------------
+  
+  // ⚠️ MUDAR ESTA SENHA AQUI PARA UMA SENHA FORTE!
+  const SENHA_MESTRA = "admin123"; 
 
   const [tab, setTab] = useState<'products' | 'orders'>('products');
   const [products, setProducts] = useState<any[]>([]);
@@ -44,9 +47,7 @@ export function Admin() {
   // --- FUNÇÃO DE LOGIN ---
   function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    // ⚠️ MUDAR ESTA SENHA AQUI EMBAIXO!
-    const SENHA_MESTRA = "@Ravi0072006"; 
-
+    
     if (passwordInput === SENHA_MESTRA) {
       setIsAuthenticated(true);
       localStorage.setItem('admin_auth', 'true');
