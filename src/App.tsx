@@ -32,8 +32,18 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedGender, setSelectedGender] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
-  // REMOVIDO: const [deliveryWarning, setDeliveryWarning] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  
+  // NOVO: Adiciona um estado para rastrear a hash (o que está depois do #)
+  const [currentHash, setCurrentHash] = useState(window.location.hash);
+
+  // NOVO: Adiciona um ouvinte para que o app mude quando o hash muda
+  useEffect(() => {
+    const onHashChange = () => setCurrentHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
 
   // Carregar produtos do backend
   useEffect(() => {
@@ -46,9 +56,6 @@ export default function App() {
         ]);
         
         setProducts(productsData);
-        // REMOVIDO: if (settingsData?.delivery_warning) {
-        // REMOVIDO:   setDeliveryWarning(settingsData.delivery_warning);
-        // REMOVIDO: }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -58,8 +65,8 @@ export default function App() {
     loadData();
   }, []);
 
-  // Verificar se está na página admin
-  const isAdminPage = window.location.pathname === '/admin';
+  // Verificar se está na página admin (usando o NOVO estado 'currentHash')
+  const isAdminPage = currentHash === '#admin';
 
   // Se for página admin, mostrar apenas o painel
   if (isAdminPage) {
@@ -136,17 +143,6 @@ export default function App() {
       />
       
       <HeroSection />
-
-      {/* REMOVIDO: O bloco JSX que exibia o aviso de entrega */}
-      {/*
-      {deliveryWarning && (
-        <div className="bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-y border-amber-500/30 py-3 px-6">
-          <p className="text-center text-amber-200 text-sm max-w-4xl mx-auto">
-            {deliveryWarning}
-          </p>
-        </div>
-      )}
-      */}
 
       <section id="produtos" className="px-6 py-16 max-w-7xl mx-auto">
         <div className="mb-12">
