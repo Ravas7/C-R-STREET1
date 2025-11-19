@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { X, Loader2, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
+import axios from 'axios'; // Usaremos axios para gerar o link MP
 
 interface CheckoutProps {
   items: CartItem[];
@@ -9,6 +10,12 @@ interface CheckoutProps {
   onClose: () => void;
   onSuccess: () => void;
 }
+
+// ⚠️ CHAVE PÚBLICA DO MERCADO PAGO
+// Obtém a chave pública (Public Key) que começa com 'APP_USR...'
+// Esta chave é segura para ser usada no frontend, ao contrário do Access Token.
+// Podes obtê-la nas Credenciais de Produção do Mercado Pago.
+const MP_PUBLIC_KEY = "APP_USR-777b0a9f-f047-481e-a9cd-32af0dcdbf3e"; // ⚠️ ATUALIZE COM A TUA CHAVE PÚBLICA REAL
 
 export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
@@ -28,6 +35,14 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     complement: ''
   });
 
+  // Limpa o estado quando o modal fecha
+  useEffect(() => {
+      if (!isOpen) {
+          setCep('');
+          setShippingCost(0);
+      }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -39,8 +54,8 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     
     setLoadingCep(true);
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = await response.json();
+      const response = await axios.get(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = response.data;
       
       if (data.erro) {
         toast.error("CEP não encontrado");
@@ -55,58 +70,75 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
         state: data.uf
       }));
 
-      // Lógica Simples de Frete (Correios API real precisa de backend complexo)
-      // Aqui simulamos baseados no Estado (UF)
+      // Lógica Simples de Frete (Simulação de Correios)
       const sudeste = ['SP', 'RJ', 'MG', 'ES'];
       const sul = ['PR', 'SC', 'RS'];
       
       if (sudeste.includes(data.uf)) {
-        setShippingCost(20.00); // Frete fixo Sudeste
+        setShippingCost(20.00); 
         toast.success("Frete Sudeste aplicado: R$ 20,00");
       } else if (sul.includes(data.uf)) {
-        setShippingCost(30.00); // Frete fixo Sul
+        setShippingCost(30.00); 
         toast.success("Frete Sul aplicado: R$ 30,00");
       } else {
-        setShippingCost(45.00); // Resto do Brasil
+        setShippingCost(45.00); 
         toast.success("Frete aplicado: R$ 45,00");
       }
 
     } catch (error) {
-      toast.error("Erro ao buscar CEP");
+      toast.error("Erro ao buscar CEP ou calcular frete");
     } finally {
       setLoadingCep(false);
     }
   }
 
-  // 2. Processa o Pagamento no Mercado Pago
+  // 2. Cria a Preferência de Pagamento no Mercado Pago (Frontend)
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
+    if (!MP_PUBLIC_KEY.startsWith('APP_USR')) {
+      toast.error("Erro: Atualize a chave pública do Mercado Pago no Checkout.tsx");
+      setLoading(false);
+      return;
+    }
+
     try {
-      // Chama a nossa Netlify Function
-      const response = await fetch('/.netlify/functions/create-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items,
-          shippingCost,
-          buyer: formData
-        })
-      });
+      // Cria a lista de itens para o Mercado Pago
+      const mpItems = items.map(item => ({
+        title: `${item.name} - Tam: ${item.selectedSize}`,
+        quantity: item.quantity,
+        unit_price: item.price,
+        currency_id: 'BRL',
+      }));
 
-      const data = await response.json();
-
-      if (data.init_point) {
-        // Redireciona para o Mercado Pago
-        window.location.href = data.init_point;
-      } else {
-        toast.error("Erro ao conectar com Mercado Pago");
+      // Adiciona o Frete
+      if (shippingCost > 0) {
+        mpItems.push({
+          title: 'Frete / Entrega',
+          quantity: 1,
+          unit_price: shippingCost,
+          currency_id: 'BRL',
+        });
       }
+
+      // ⚠️ ESTA CHAMADA REQUER UM ENDPOINT DE BACKEND (PREFERÊNCIA)
+      // Como não temos backend, vamos usar um endpoint de testes públicos
+      // para simular a criação da preferência.
+      // O MP real deve ser chamado do teu servidor (Netlify Function - que custa).
+      // Para o deploy funcionar, vamos simular o link:
+      
+      const testLink = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=MP-TEST-${Date.now()}`;
+      
+      // Abre o link simulado (num projeto real, isto seria o link do MP)
+      window.location.href = testLink;
+      onSuccess();
+
+      // **NO CENÁRIO REAL SEM NETLIFY FUNCTIONS, TU DEVERIAS USAR UM BOTÃO DE PAGAMENTO EMBUTIDO DO MP, QUE É 100% FRONTEND**
 
     } catch (error) {
       console.error(error);
-      toast.error("Erro ao processar pedido");
+      toast.error("Erro ao processar pedido. (Sem Servidor: use botão MP)");
     } finally {
       setLoading(false);
     }
@@ -203,7 +235,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
               disabled={loading || shippingCost === 0}
               className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? <Loader2 className="animate-spin" /> : "Pagar com Mercado Pago"}
+              {loading ? <Loader2 className="animate-spin" /> : "Pagar (Aguarde Confirmação do Pedido)"}
             </button>
             
             {shippingCost === 0 && cep.length === 8 && (
@@ -212,6 +244,11 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
              {shippingCost === 0 && cep.length !== 8 && (
               <p className="text-xs text-center text-zinc-500 mt-2">Digite o CEP para calcular o frete</p>
             )}
+            
+            <p className="text-xs text-center text-red-400 mt-4">
+              ⚠️ Alerta: O pagamento real requer um servidor (custos de backend). 
+              Esta versão redireciona para um link de teste após a confirmação.
+            </p>
           </div>
         </div>
       </div>
