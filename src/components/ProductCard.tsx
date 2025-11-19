@@ -37,6 +37,7 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
     <div className="group bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-all flex flex-col h-full">
       {/* Área da Imagem */}
       <div className="relative aspect-[3/4] overflow-hidden bg-zinc-800">
+        {/* CORREÇÃO: Usamos a tag <img> nativa em vez do componente bloqueador do Figma */}
         <img
           src={images[currentImageIndex]}
           alt={product.name}
