@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
-import axios from 'axios'; // Usaremos axios para gerar o link MP
+import axios from 'axios'; 
+// Supondo que você tenha a função createOrder (comentada abaixo)
+// import { createOrder } from '../utils/api'; 
 
 interface CheckoutProps {
   items: CartItem[];
@@ -11,11 +13,8 @@ interface CheckoutProps {
   onSuccess: () => void;
 }
 
-// ⚠️ CHAVE PÚBLICA DO MERCADO PAGO
-// Obtém a chave pública (Public Key) que começa com 'APP_USR...'
-// Esta chave é segura para ser usada no frontend, ao contrário do Access Token.
-// Podes obtê-la nas Credenciais de Produção do Mercado Pago.
-const MP_PUBLIC_KEY = "APP_USR-777b0a9f-f047-481e-a9cd-32af0dcdbf3e"; // ⚠️ ATUALIZE COM A TUA CHAVE PÚBLICA REAL
+// ⚠️ Mude este número para o seu WhatsApp (71993678190)
+const WHATSAPP_NUMBER = "5571993678190"; 
 
 export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
@@ -35,7 +34,6 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     complement: ''
   });
 
-  // Limpa o estado quando o modal fecha
   useEffect(() => {
       if (!isOpen) {
           setCep('');
@@ -48,7 +46,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const total = subtotal + shippingCost;
 
-  // 1. Busca Endereço e Calcula Frete (Simulado por Região)
+  // 1. Busca Endereço e Calcula Frete
   async function handleCepBlur() {
     if (cep.length !== 8) return;
     
@@ -92,53 +90,49 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     }
   }
 
-  // 2. Cria a Preferência de Pagamento no Mercado Pago (Frontend)
+  // 2. SALVA o Pedido e Redireciona para o WhatsApp
   async function handlePayment(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    
+    // Constrói a mensagem detalhada
+    const itemDetails = items.map(item => 
+        `${item.quantity}x ${item.name} (Tamanho: ${item.selectedSize}) - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}`
+    ).join('\n');
 
-    if (!MP_PUBLIC_KEY.startsWith('APP_USR')) {
-      toast.error("Erro: Atualize a chave pública do Mercado Pago no Checkout.tsx");
-      setLoading(false);
-      return;
-    }
+    const addressDetails = `
+*--- DETALHES DO PEDIDO ---*
+*Total:* R$ ${total.toFixed(2).replace('.', ',')} (Frete: R$ ${shippingCost.toFixed(2).replace('.', ',')})
+
+*Endereço:*
+${formData.street}, ${formData.number} ${formData.complement ? `(${formData.complement})` : ''}
+Bairro: ${formData.neighborhood}
+CEP: ${cep}
+${formData.city}/${formData.state}
+
+*Cliente:* ${formData.name}
+*E-mail:* ${formData.email}
+*Telefone:* ${formData.phone}
+
+*Itens:*
+${itemDetails}
+    `.trim();
 
     try {
-      // Cria a lista de itens para o Mercado Pago
-      const mpItems = items.map(item => ({
-        title: `${item.name} - Tam: ${item.selectedSize}`,
-        quantity: item.quantity,
-        unit_price: item.price,
-        currency_id: 'BRL',
-      }));
-
-      // Adiciona o Frete
-      if (shippingCost > 0) {
-        mpItems.push({
-          title: 'Frete / Entrega',
-          quantity: 1,
-          unit_price: shippingCost,
-          currency_id: 'BRL',
-        });
-      }
-
-      // ⚠️ ESTA CHAMADA REQUER UM ENDPOINT DE BACKEND (PREFERÊNCIA)
-      // Como não temos backend, vamos usar um endpoint de testes públicos
-      // para simular a criação da preferência.
-      // O MP real deve ser chamado do teu servidor (Netlify Function - que custa).
-      // Para o deploy funcionar, vamos simular o link:
-      
-      const testLink = `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=MP-TEST-${Date.now()}`;
-      
-      // Abre o link simulado (num projeto real, isto seria o link do MP)
-      window.location.href = testLink;
-      onSuccess();
-
-      // **NO CENÁRIO REAL SEM NETLIFY FUNCTIONS, TU DEVERIAS USAR UM BOTÃO DE PAGAMENTO EMBUTIDO DO MP, QUE É 100% FRONTEND**
-
+        // ⚠️ Aqui você faria: await createOrder(orderData); para salvar no Supabase Admin
+        
+        toast.success("Pedido finalizado! A abrir o WhatsApp...");
+        
+        const encodedMessage = encodeURIComponent(addressDetails);
+        const whatsappLink = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=Ol%C3%A1%2C%20C%26R%20Street%21%20Gostaria%20de%20finalizar%20o%20pedido%20que%20acabei%20de%20fazer.%0A%0A${encodedMessage}`;
+        
+        // Abre o link do WhatsApp
+        window.location.href = whatsappLink;
+        onSuccess(); // Limpa o carrinho
+        
     } catch (error) {
-      console.error(error);
-      toast.error("Erro ao processar pedido. (Sem Servidor: use botão MP)");
+        console.error("Erro ao processar pedido:", error);
+        toast.error("Erro ao processar pedido. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -198,6 +192,20 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
                   onChange={e => setFormData({...formData, email: e.target.value})}
                   className="bg-zinc-950 border border-zinc-800 rounded p-2"
                 />
+                <input 
+                  required 
+                  type="tel"
+                  placeholder="Telefone (para contato)" 
+                  value={formData.phone}
+                  onChange={e => setFormData({...formData, phone: e.target.value})}
+                  className="bg-zinc-950 border border-zinc-800 rounded p-2"
+                />
+                <input 
+                  placeholder="Complemento (ex: Apartamento 101)" 
+                  value={formData.complement}
+                  onChange={e => setFormData({...formData, complement: e.target.value})}
+                  className="bg-zinc-950 border border-zinc-800 rounded p-2"
+                />
               </div>
             </div>
           </form>
@@ -233,9 +241,9 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
               type="submit"
               form="checkout-form"
               disabled={loading || shippingCost === 0}
-              className="w-full mt-6 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full mt-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? <Loader2 className="animate-spin" /> : "Pagar (Aguarde Confirmação do Pedido)"}
+              {loading ? <Loader2 className="animate-spin" /> : "Finalizar Pedido e Pagar via WhatsApp/PIX"}
             </button>
             
             {shippingCost === 0 && cep.length === 8 && (
@@ -245,9 +253,8 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
               <p className="text-xs text-center text-zinc-500 mt-2">Digite o CEP para calcular o frete</p>
             )}
             
-            <p className="text-xs text-center text-red-400 mt-4">
-              ⚠️ Alerta: O pagamento real requer um servidor (custos de backend). 
-              Esta versão redireciona para um link de teste após a confirmação.
+            <p className="text-xs text-center text-zinc-400 mt-4">
+              Ao finalizar, o pedido completo será enviado para o WhatsApp para você confirmar o pagamento (PIX ou outro método manual).
             </p>
           </div>
         </div>
