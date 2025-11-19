@@ -32,7 +32,7 @@ export default function App() {
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedGender, setSelectedGender] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
-  const [deliveryWarning, setDeliveryWarning] = useState<string>('');
+  // REMOVIDO: const [deliveryWarning, setDeliveryWarning] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
   // Carregar produtos do backend
@@ -46,9 +46,9 @@ export default function App() {
         ]);
         
         setProducts(productsData);
-        if (settingsData?.delivery_warning) {
-          setDeliveryWarning(settingsData.delivery_warning);
-        }
+        // REMOVIDO: if (settingsData?.delivery_warning) {
+        // REMOVIDO:   setDeliveryWarning(settingsData.delivery_warning);
+        // REMOVIDO: }
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
@@ -59,8 +59,7 @@ export default function App() {
   }, []);
 
   // Verificar se está na página admin
-  // Alterado para usar HASH (#) para funcionar no GitHub Pages
-const isAdminPage = window.location.hash === '#admin';
+  const isAdminPage = window.location.pathname === '/admin';
 
   // Se for página admin, mostrar apenas o painel
   if (isAdminPage) {
@@ -138,6 +137,8 @@ const isAdminPage = window.location.hash === '#admin';
       
       <HeroSection />
 
+      {/* REMOVIDO: O bloco JSX que exibia o aviso de entrega */}
+      {/*
       {deliveryWarning && (
         <div className="bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-y border-amber-500/30 py-3 px-6">
           <p className="text-center text-amber-200 text-sm max-w-4xl mx-auto">
@@ -145,6 +146,7 @@ const isAdminPage = window.location.hash === '#admin';
           </p>
         </div>
       )}
+      */}
 
       <section id="produtos" className="px-6 py-16 max-w-7xl mx-auto">
         <div className="mb-12">
