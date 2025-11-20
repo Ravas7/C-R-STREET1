@@ -1,9 +1,8 @@
-import { useState, useEffect } from 'react'; // useMemo removido
+import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
-// REMOVIDO: import axios from 'axios'; 
-// import { createOrder } from '../utils/api'; 
+// Não precisamos de axios nem de useMemo, apenas fetch nativo.
 
 interface CheckoutProps {
   items: CartItem[];
@@ -12,7 +11,6 @@ interface CheckoutProps {
   onSuccess: () => void;
 }
 
-// ⚠️ Mude este número para o seu WhatsApp (71993678190)
 const WHATSAPP_NUMBER = "5571993678190"; 
 const FREE_SHIPPING_THRESHOLD = 200.00; // Limite para Frete Grátis
 
@@ -20,7 +18,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [cep, setCep] = useState('');
-  const [shippingCost, setShippingCost] = useState(0); // Apenas um estado de custo final
+  const [baseShippingCost, setBaseShippingCost] = useState<number | null>(null); // NOVO: Guarda a taxa base (ou null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -37,7 +35,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   useEffect(() => {
       if (!isOpen) {
           setCep('');
-          setShippingCost(0); // Limpa o custo final
+          setBaseShippingCost(null); // Limpa o custo base
       }
   }, [isOpen]);
 
@@ -45,14 +43,21 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
-  // CORRIGIDO: Cálculo de Total Simples
-  const total = subtotal + shippingCost; 
-
-  // NOVO: Função de Cálculo de Frete Simples (Para mensagens)
-  const calculateFinalShipping = (baseCost: number, currentSubtotal: number): number => {
-    return currentSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseCost;
+  // ----------------------------------------------------
+  // CÁLCULO SEGURO DO CUSTO FINAL (Síncrono e sem conflito)
+  // ----------------------------------------------------
+  const calculateFinalShipping = (subtotal: number): number => {
+    // Se o custo base não foi definido pelo CEP, o frete é 0 (e o botão fica desativado)
+    if (baseShippingCost === null) return 0; 
+    
+    // Se o subtotal atingir o limite, o frete é GRÁTIS
+    return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseShippingCost;
   };
   
+  const finalShippingCost = calculateFinalShipping(subtotal);
+  const total = subtotal + finalShippingCost; 
+
+
   // 1. Busca Endereço e Calcula Frete Base
   async function handleCepBlur() {
     if (cep.length !== 8) return;
@@ -67,6 +72,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
       if (data.erro) {
         toast.error("CEP não encontrado");
         calculatedBaseCost = 0;
+        setBaseShippingCost(0); // Garante que o estado é atualizado para 0
         return;
       }
 
@@ -90,14 +96,15 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
         calculatedBaseCost = 45.00;
       }
 
-      // CORRIGIDO: Calcula e define o custo final (com a regra de R$ 200) diretamente
-      const finalCost = calculateFinalShipping(calculatedBaseCost, subtotal);
-      setShippingCost(finalCost); // Define o custo final no estado
+      // NOVO: Apenas salva o custo base. O cálculo final é feito acima.
+      setBaseShippingCost(calculatedBaseCost); 
       
-      if (finalCost === 0) {
+      const messageCost = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : calculatedBaseCost;
+
+      if (messageCost === 0) {
         toast.success("Frete Grátis aplicado! Total acima de R$ 200.");
       } else {
-        toast.success(`Frete aplicado: R$ ${finalCost.toFixed(2).replace('.', ',')}`);
+        toast.success(`Frete aplicado: R$ ${messageCost.toFixed(2).replace('.', ',')}`);
       }
 
 
@@ -113,13 +120,14 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     e.preventDefault();
     setLoading(true);
     
+    // Constrói a mensagem
     const itemDetails = items.map(item => 
         `${item.quantity}x ${item.name} (Tamanho: ${item.selectedSize}) - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}`
     ).join('\n');
 
     const addressDetails = `
 *--- DETALHES DO PEDIDO ---*
-*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
+*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${finalShippingCost > 0 ? `Frete: R$ ${finalShippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
 
 *Endereço:*
 ${formData.street}, ${formData.number} ${formData.complement ? `(${formData.complement})` : ''}
@@ -141,7 +149,7 @@ ${itemDetails}
         toast.success("Pedido finalizado! A abrir o WhatsApp...");
         
         const encodedMessage = encodeURIComponent(addressDetails);
-        const whatsappLink = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=Ol%C3%A1%2C%20C%26R%20Street%21%20Gostaria%20de%20finalizar%20o%20pedido%20que%20acabei%20de%20fazer.%0A%0A${encodedMessage}`;
+        const whatsappLink = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=Ol%C3%A1%2C%20C%26R%20Street%21%20Gostaria%20de%20finalizar%20o%20pedido%20que%20acabei%20de%20de%20fazer.%0A%0A${encodedMessage}`;
         
         window.location.href = whatsappLink;
         onSuccess(); 
@@ -245,10 +253,10 @@ ${itemDetails}
               </div>
               <div className="flex justify-between text-zinc-400">
                 <span>Frete</span>
-                {shippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
+                {finalShippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
                     <span className="text-green-400 font-bold">GRÁTIS!</span>
                 ) : (
-                    <span>R$ {shippingCost.toFixed(2)}</span>
+                    <span>R$ {finalShippingCost.toFixed(2)}</span>
                 )}
               </div>
               <div className="flex justify-between text-lg font-bold text-white pt-2">
@@ -267,16 +275,20 @@ ${itemDetails}
             <button
               type="submit"
               form="checkout-form"
-              disabled={loading || shippingCost === 0 && cep.length < 8} 
+              disabled={loading || baseShippingCost === null} 
               className="w-full mt-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <Loader2 className="animate-spin" /> : "Finalizar Pedido e Pagar via WhatsApp/PIX"}
             </button>
             
-            {shippingCost === 0 && cep.length < 8 && (
+            {/* Mensagem de status do CEP */}
+            {baseShippingCost === null && cep.length < 8 && (
               <p className="text-xs text-center text-zinc-500 mt-2">Digite o CEP para calcular o frete</p>
             )}
-            
+            {baseShippingCost === null && cep.length === 8 && !loadingCep && (
+                <p className="text-xs text-center text-amber-500 mt-2">Clique fora do campo CEP para calcular.</p>
+            )}
+
             <p className="text-xs text-center text-zinc-400 mt-4">
               Ao finalizar, o pedido completo será enviado para o WhatsApp para você confirmar o pagamento (PIX ou outro método manual).
             </p>
