@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // Adicionado useMemo
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
-import axios from 'axios'; 
-// import { createOrder } from '../utils/api'; // Função para salvar o pedido no Supabase
+// REMOVIDO: import axios from 'axios'; 
+// import { createOrder } from '../utils/api'; 
 
 interface CheckoutProps {
   items: CartItem[];
@@ -14,13 +14,13 @@ interface CheckoutProps {
 
 // ⚠️ Mude este número para o seu WhatsApp (71993678190)
 const WHATSAPP_NUMBER = "5571993678190"; 
-const FREE_SHIPPING_THRESHOLD = 200.00; // NOVO: Limite para Frete Grátis
+const FREE_SHIPPING_THRESHOLD = 200.00; // Limite para Frete Grátis
 
 export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [cep, setCep] = useState('');
-  const [shippingCost, setShippingCost] = useState(0);
+  const [baseShippingCost, setBaseShippingCost] = useState(0); // NOVO: Guarda o custo base do frete
   
   const [formData, setFormData] = useState({
     name: '',
@@ -37,7 +37,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   useEffect(() => {
       if (!isOpen) {
           setCep('');
-          setShippingCost(0);
+          setBaseShippingCost(0); // Limpa o custo base
       }
   }, [isOpen]);
 
@@ -45,47 +45,27 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
-  // ----------------------------------------------------
-  // NOVO CÁLCULO DE FRETE (USANDO subtotal ATUALIZADO)
-  // ----------------------------------------------------
-  
-  const total = subtotal + shippingCost; // O shippingCost será 0 se subtotal >= 200
-  
-  // Função que verifica a regra e ajusta o custo
-  const calculateFinalShipping = (baseCost: number, currentSubtotal: number): number => {
-    return currentSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseCost;
-  };
-  
-  // Efeito que re-calcula o frete sempre que o subtotal muda (se o carrinho for aberto)
-  useEffect(() => {
-    if (isOpen) {
-        // Recalcula o frete base e aplica a regra
-        const baseShipping = shippingCost > 0 
-            ? shippingCost // Se já foi calculado pelo CEP, usa o valor base
-            : 0; // Se ainda não foi calculado, usa 0
-            
-        const finalCost = calculateFinalShipping(baseShipping, subtotal);
-        if (finalCost !== shippingCost) {
-            setShippingCost(finalCost);
-        }
-    }
-  }, [subtotal, isOpen]); 
+  // CORREÇÃO: Calcula o frete final de forma síncrona usando useMemo
+  const finalShippingCost = useMemo(() => {
+    return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseShippingCost;
+  }, [baseShippingCost, subtotal]);
 
+  const total = subtotal + finalShippingCost; // Usa o custo final
 
   // 1. Busca Endereço e Calcula Frete Base
   async function handleCepBlur() {
     if (cep.length !== 8) return;
     
     setLoadingCep(true);
-    let baseShippingCost = 0;
+    let calculatedBaseCost = 0; // Variável temporária
 
     try {
-      const response = await axios.get(`https://viacep.com.br/ws/${cep}/json/`);
-      const data = response.data;
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const data = await response.json();
       
       if (data.erro) {
         toast.error("CEP não encontrado");
-        baseShippingCost = 0;
+        calculatedBaseCost = 0;
         return;
       }
 
@@ -102,21 +82,22 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
       const sul = ['PR', 'SC', 'RS'];
       
       if (sudeste.includes(data.uf)) {
-        baseShippingCost = 20.00;
+        calculatedBaseCost = 20.00;
       } else if (sul.includes(data.uf)) {
-        baseShippingCost = 30.00;
+        calculatedBaseCost = 30.00;
       } else {
-        baseShippingCost = 45.00;
+        calculatedBaseCost = 45.00;
       }
 
-      // Aplica a regra de R$ 200,00 e atualiza o estado
-      const finalCost = calculateFinalShipping(baseShippingCost, subtotal);
-      setShippingCost(finalCost);
+      // NOVO: Apenas salva o custo base. O useMemo calcula o frete grátis.
+      setBaseShippingCost(calculatedBaseCost);
       
-      if (finalCost === 0) {
+      const finalCostForMessage = calculatedBaseCost >= FREE_SHIPPING_THRESHOLD ? 0 : calculatedBaseCost;
+
+      if (finalCostForMessage === 0) {
         toast.success("Frete Grátis aplicado! Total acima de R$ 200.");
       } else {
-        toast.success(`Frete aplicado: R$ ${finalCost.toFixed(2).replace('.', ',')}`);
+        toast.success(`Frete base aplicado: R$ ${finalCostForMessage.toFixed(2).replace('.', ',')}`);
       }
 
 
@@ -138,7 +119,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
     const addressDetails = `
 *--- DETALHES DO PEDIDO ---*
-*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
+*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${finalShippingCost > 0 ? `Frete: R$ ${finalShippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
 
 *Endereço:*
 ${formData.street}, ${formData.number} ${formData.complement ? `(${formData.complement})` : ''}
@@ -167,7 +148,7 @@ ${itemDetails}
         
     } catch (error) {
         console.error("Erro ao processar pedido:", error);
-        toast.error("Erro ao processar pedido. Tente novamente.");
+        toast.error("Erro ao redirecionar para o WhatsApp. Verifique sua conexão.");
     } finally {
       setLoading(false);
     }
@@ -264,10 +245,10 @@ ${itemDetails}
               </div>
               <div className="flex justify-between text-zinc-400">
                 <span>Frete</span>
-                {shippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
+                {finalShippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
                     <span className="text-green-400 font-bold">GRÁTIS!</span>
                 ) : (
-                    <span>R$ {shippingCost.toFixed(2)}</span>
+                    <span>R$ {finalShippingCost.toFixed(2)}</span>
                 )}
               </div>
               <div className="flex justify-between text-lg font-bold text-white pt-2">
@@ -286,13 +267,13 @@ ${itemDetails}
             <button
               type="submit"
               form="checkout-form"
-              disabled={loading || shippingCost === 0 && cep.length < 8}
+              disabled={loading || baseShippingCost === 0 && cep.length < 8} // Usa baseShippingCost
               className="w-full mt-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <Loader2 className="animate-spin" /> : "Finalizar Pedido e Pagar via WhatsApp/PIX"}
             </button>
             
-            {shippingCost === 0 && subtotal < FREE_SHIPPING_THRESHOLD && cep.length < 8 && (
+            {baseShippingCost === 0 && cep.length < 8 && (
               <p className="text-xs text-center text-zinc-500 mt-2">Digite o CEP para calcular o frete</p>
             )}
             
