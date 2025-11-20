@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
-// Não precisamos de axios nem de useMemo, apenas fetch nativo.
+// Importa o componente do toast para usar em caso de sucesso
 
 interface CheckoutProps {
   items: CartItem[];
@@ -18,7 +18,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [cep, setCep] = useState('');
-  const [baseShippingCost, setBaseShippingCost] = useState<number | null>(null); // NOVO: Guarda a taxa base (ou null)
+  const [baseShippingCost, setBaseShippingCost] = useState<number | null>(null); // Guarda a taxa base (ou null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -35,7 +35,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   useEffect(() => {
       if (!isOpen) {
           setCep('');
-          setBaseShippingCost(null); // Limpa o custo base
+          setBaseShippingCost(null); 
       }
   }, [isOpen]);
 
@@ -43,14 +43,9 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
-  // ----------------------------------------------------
-  // CÁLCULO SEGURO DO CUSTO FINAL (Síncrono e sem conflito)
-  // ----------------------------------------------------
+  // CÁLCULO SEGURO DO CUSTO FINAL (Síncrono)
   const calculateFinalShipping = (subtotal: number): number => {
-    // Se o custo base não foi definido pelo CEP, o frete é 0 (e o botão fica desativado)
     if (baseShippingCost === null) return 0; 
-    
-    // Se o subtotal atingir o limite, o frete é GRÁTIS
     return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseShippingCost;
   };
   
@@ -60,7 +55,10 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
   // 1. Busca Endereço e Calcula Frete Base
   async function handleCepBlur() {
-    if (cep.length !== 8) return;
+    if (cep.length !== 8) {
+        setBaseShippingCost(null); // Limpa o frete se o CEP não estiver completo
+        return;
+    }
     
     setLoadingCep(true);
     let calculatedBaseCost = 0; 
@@ -72,10 +70,11 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
       if (data.erro) {
         toast.error("CEP não encontrado");
         calculatedBaseCost = 0;
-        setBaseShippingCost(0); // Garante que o estado é atualizado para 0
+        setBaseShippingCost(0);
         return;
       }
 
+      // 🛑 CORRIGIDO: Mudar o estado do formulário primeiro
       setFormData(prev => ({
         ...prev,
         street: data.logradouro,
@@ -96,19 +95,15 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
         calculatedBaseCost = 45.00;
       }
 
-      // NOVO: Apenas salva o custo base. O cálculo final é feito acima.
+      // CORRIGIDO: Remover toast.success e apenas atualizar o estado base
       setBaseShippingCost(calculatedBaseCost); 
       
-      const messageCost = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : calculatedBaseCost;
-
-      if (messageCost === 0) {
-        toast.success("Frete Grátis aplicado! Total acima de R$ 200.");
-      } else {
-        toast.success(`Frete aplicado: R$ ${messageCost.toFixed(2).replace('.', ',')}`);
-      }
+      // O React recalcula o custo final (Frete Grátis) de forma segura agora.
 
 
     } catch (error) {
+      // 🛑 CORRIGIDO: Mudar o estado para null em caso de falha de conexão
+      setBaseShippingCost(null);
       toast.error("Erro ao buscar CEP ou calcular frete");
     } finally {
       setLoadingCep(false);
@@ -120,6 +115,13 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
     e.preventDefault();
     setLoading(true);
     
+    // Certifica-se de que o CEP foi calculado
+    if (baseShippingCost === null) {
+        toast.error("Por favor, digite e confirme o CEP para calcular o frete.");
+        setLoading(false);
+        return;
+    }
+
     // Constrói a mensagem
     const itemDetails = items.map(item => 
         `${item.quantity}x ${item.name} (Tamanho: ${item.selectedSize}) - R$ ${(item.price * item.quantity).toFixed(2).replace('.', ',')}`
@@ -146,13 +148,15 @@ ${itemDetails}
     try {
         // ⚠️ Aqui você faria: await createOrder(orderData); 
         
-        toast.success("Pedido finalizado! A abrir o WhatsApp...");
-        
+        // CORRIGIDO: Toast só é chamado após o carregamento da página
         const encodedMessage = encodeURIComponent(addressDetails);
         const whatsappLink = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=Ol%C3%A1%2C%20C%26R%20Street%21%20Gostaria%20de%20finalizar%20o%20pedido%20que%20acabei%20de%20de%20fazer.%0A%0A${encodedMessage}`;
         
         window.location.href = whatsappLink;
-        onSuccess(); 
+        // O toast de sucesso pode ser chamado aqui ou no onSuccess
+        // Não vamos chamar o toast de sucesso para evitar o erro #310 na transição
+        onClose(); // Fecha o modal
+        onSuccess(); // Limpa o carrinho
         
     } catch (error) {
         console.error("Erro ao processar pedido:", error);
@@ -184,7 +188,7 @@ ${itemDetails}
                     placeholder="CEP (apenas números)"
                     value={cep}
                     onChange={e => setCep(e.target.value.replace(/\D/g, ''))}
-                    onBlur={handleCepBlur}
+                    onBlur={handleCepBlur} // Chamada para buscar o CEP
                     maxLength={8}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded p-2 pl-3"
                   />
