@@ -13,8 +13,10 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
   const [isAdded, setIsAdded] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  // Garante que images seja um array, mesmo que venha vazio ou null
-  const images = product.images?.length ? product.images : [product.image];
+  // CORREÇÃO: Cria a lista de imagens
+  const images = (Array.isArray(product.image) ? product.image : (product.images || [product.image as string]))
+    .filter(url => url && url.length > 0); // Filtra URLs vazias
+
   const hasMultipleImages = images.length > 1;
 
   const handleAddToCart = () => {
@@ -37,14 +39,12 @@ export function ProductCard({ product, onAddToCart }: ProductCardProps) {
     <div className="group bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-all flex flex-col h-full">
       {/* Área da Imagem */}
       <div className="relative aspect-[3/4] overflow-hidden bg-zinc-800">
-        {/* CORREÇÃO: Usamos a tag <img> nativa em vez do componente bloqueador do Figma */}
         <img
-          src={images[currentImageIndex]}
+          src={images[currentImageIndex] || 'https://placehold.co/400x600/27272a/FFF?text=Sem+Imagem'}
           alt={product.name}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           onError={(e) => {
-            // Se a imagem falhar, mostra um quadrado cinza com aviso
-            (e.target as HTMLImageElement).src = 'https://placehold.co/400x600/27272a/FFF?text=Sem+Imagem';
+            (e.target as HTMLImageElement).src = 'https://placehold.co/400x600/27272a/FFF?text=Erro+Imagem';
           }}
         />
         
