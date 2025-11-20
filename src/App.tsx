@@ -13,7 +13,8 @@ export interface Product {
   id: number;
   name: string;
   price: number;
-  image: string;
+  // CORREÇÃO: 'image' passa a ser 'string | string[]' (uma ou várias)
+  image: string | string[]; 
   images?: string[];
   category: string;
   gender?: 'Masculino' | 'Feminino' | 'Unissex';
