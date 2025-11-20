@@ -13,7 +13,6 @@ export interface Product {
   id: number;
   name: string;
   price: number;
-  // CORREÇÃO: 'image' passa a ser 'string | string[]' (uma ou várias)
   image: string | string[]; 
   images?: string[];
   category: string;
@@ -27,6 +26,7 @@ export interface CartItem extends Product {
 }
 
 export default function App() {
+  // ... (Estados do carrinho e produtos)
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -35,16 +35,17 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // NOVO: Adiciona um estado para rastrear a hash (o que está depois do #)
+  // CORRIGIDO: Adiciona um estado para rastrear a hash (#admin)
   const [currentHash, setCurrentHash] = useState(window.location.hash);
 
-  // NOVO: Adiciona um ouvinte para que o app mude quando o hash muda
+  // CORRIGIDO: Adiciona um ouvinte para que o app mude quando o hash muda
   useEffect(() => {
     const onHashChange = () => setCurrentHash(window.location.hash);
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  // ... (Funções loadData e isAdminPage)
 
   // Carregar produtos do backend
   useEffect(() => {
@@ -79,6 +80,7 @@ export default function App() {
     );
   }
 
+
   const categories = ['Moletons', 'Camisetas', 'Calças', 'Calçados', 'Acessórios'];
   const genders = ['Masculino', 'Feminino', 'Unissex'];
 
@@ -89,7 +91,8 @@ export default function App() {
       );
 
       if (existingItem) {
-        toast.success(`${product.name} (${selectedSize}) adicionado novamente!`);
+        // CORREÇÃO: Mantenha apenas o estado. Remova o toast para evitar o erro #310
+        // toast.success(`${product.name} (${selectedSize}) adicionado novamente!`); 
         return prevItems.map((item) =>
           item.id === product.id && item.selectedSize === selectedSize
             ? { ...item, quantity: item.quantity + 1 }
@@ -97,7 +100,8 @@ export default function App() {
         );
       }
 
-      toast.success(`${product.name} (${selectedSize}) adicionado ao carrinho!`);
+      // CORREÇÃO: Mantenha apenas o estado. Remova o toast para evitar o erro #310
+      // toast.success(`${product.name} (${selectedSize}) adicionado ao carrinho!`);
       return [...prevItems, { ...product, quantity: 1, selectedSize }];
     });
   };
@@ -144,7 +148,7 @@ export default function App() {
       />
       
       <HeroSection />
-
+      {/* ... (Resto do JSX) */}
       <section id="produtos" className="px-6 py-16 max-w-7xl mx-auto">
         <div className="mb-12">
           <h2 className="mb-8">Produtos</h2>
