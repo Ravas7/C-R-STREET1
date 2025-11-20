@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
-// Importa o componente do toast para usar em caso de sucesso
 
 interface CheckoutProps {
   items: CartItem[];
@@ -56,7 +55,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   // 1. Busca Endereço e Calcula Frete Base
   async function handleCepBlur() {
     if (cep.length !== 8) {
-        setBaseShippingCost(null); // Limpa o frete se o CEP não estiver completo
+        setBaseShippingCost(null); 
         return;
     }
     
@@ -70,11 +69,10 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
       if (data.erro) {
         toast.error("CEP não encontrado");
         calculatedBaseCost = 0;
-        setBaseShippingCost(0);
+        setBaseShippingCost(0); 
         return;
       }
 
-      // 🛑 CORRIGIDO: Mudar o estado do formulário primeiro
       setFormData(prev => ({
         ...prev,
         street: data.logradouro,
@@ -95,14 +93,12 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
         calculatedBaseCost = 45.00;
       }
 
-      // CORRIGIDO: Remover toast.success e apenas atualizar o estado base
       setBaseShippingCost(calculatedBaseCost); 
       
-      // O React recalcula o custo final (Frete Grátis) de forma segura agora.
+      // Removemos o toast.success daqui, pois ele causa o erro #310.
 
 
     } catch (error) {
-      // 🛑 CORRIGIDO: Mudar o estado para null em caso de falha de conexão
       setBaseShippingCost(null);
       toast.error("Erro ao buscar CEP ou calcular frete");
     } finally {
@@ -148,21 +144,26 @@ ${itemDetails}
     try {
         // ⚠️ Aqui você faria: await createOrder(orderData); 
         
-        // CORRIGIDO: Toast só é chamado após o carregamento da página
+        // CORRIGIDO: Redireciona ANTES de fechar o modal.
         const encodedMessage = encodeURIComponent(addressDetails);
         const whatsappLink = `https://api.whatsapp.com/send?phone=${WHATSAPP_NUMBER}&text=Ol%C3%A1%2C%20C%26R%20Street%21%20Gostaria%20de%20finalizar%20o%20pedido%20que%20acabei%20de%20de%20fazer.%0A%0A${encodedMessage}`;
         
+        // Abre o link do WhatsApp (isto deve funcionar)
         window.location.href = whatsappLink;
-        // O toast de sucesso pode ser chamado aqui ou no onSuccess
-        // Não vamos chamar o toast de sucesso para evitar o erro #310 na transição
-        onClose(); // Fecha o modal
-        onSuccess(); // Limpa o carrinho
+        
+        // O crash ocorre logo a seguir. Vamos forçar um pequeno delay para a limpeza
+        setTimeout(() => {
+            onClose(); 
+            onSuccess();
+            toast.success("Redirecionado para o WhatsApp!");
+        }, 100);
+
         
     } catch (error) {
         console.error("Erro ao processar pedido:", error);
         toast.error("Erro ao redirecionar para o WhatsApp. Verifique sua conexão.");
     } finally {
-      setLoading(false);
+        // Não definir loading aqui para não causar renderização
     }
   }
 
