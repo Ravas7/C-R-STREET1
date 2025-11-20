@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'; // Adicionado useMemo
+import { useState, useEffect } from 'react'; // useMemo removido
 import { X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CartItem } from '../App';
@@ -20,7 +20,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [loadingCep, setLoadingCep] = useState(false);
   const [cep, setCep] = useState('');
-  const [baseShippingCost, setBaseShippingCost] = useState(0); // NOVO: Guarda o custo base do frete
+  const [shippingCost, setShippingCost] = useState(0); // Apenas um estado de custo final
   
   const [formData, setFormData] = useState({
     name: '',
@@ -37,7 +37,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
   useEffect(() => {
       if (!isOpen) {
           setCep('');
-          setBaseShippingCost(0); // Limpa o custo base
+          setShippingCost(0); // Limpa o custo final
       }
   }, [isOpen]);
 
@@ -45,19 +45,20 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   
-  // CORREÇÃO: Calcula o frete final de forma síncrona usando useMemo
-  const finalShippingCost = useMemo(() => {
-    return subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseShippingCost;
-  }, [baseShippingCost, subtotal]);
+  // CORRIGIDO: Cálculo de Total Simples
+  const total = subtotal + shippingCost; 
 
-  const total = subtotal + finalShippingCost; // Usa o custo final
-
+  // NOVO: Função de Cálculo de Frete Simples (Para mensagens)
+  const calculateFinalShipping = (baseCost: number, currentSubtotal: number): number => {
+    return currentSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : baseCost;
+  };
+  
   // 1. Busca Endereço e Calcula Frete Base
   async function handleCepBlur() {
     if (cep.length !== 8) return;
     
     setLoadingCep(true);
-    let calculatedBaseCost = 0; // Variável temporária
+    let calculatedBaseCost = 0; 
 
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
@@ -89,15 +90,14 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
         calculatedBaseCost = 45.00;
       }
 
-      // NOVO: Apenas salva o custo base. O useMemo calcula o frete grátis.
-      setBaseShippingCost(calculatedBaseCost);
+      // CORRIGIDO: Calcula e define o custo final (com a regra de R$ 200) diretamente
+      const finalCost = calculateFinalShipping(calculatedBaseCost, subtotal);
+      setShippingCost(finalCost); // Define o custo final no estado
       
-      const finalCostForMessage = calculatedBaseCost >= FREE_SHIPPING_THRESHOLD ? 0 : calculatedBaseCost;
-
-      if (finalCostForMessage === 0) {
+      if (finalCost === 0) {
         toast.success("Frete Grátis aplicado! Total acima de R$ 200.");
       } else {
-        toast.success(`Frete base aplicado: R$ ${finalCostForMessage.toFixed(2).replace('.', ',')}`);
+        toast.success(`Frete aplicado: R$ ${finalCost.toFixed(2).replace('.', ',')}`);
       }
 
 
@@ -119,7 +119,7 @@ export function Checkout({ items, isOpen, onClose, onSuccess }: CheckoutProps) {
 
     const addressDetails = `
 *--- DETALHES DO PEDIDO ---*
-*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${finalShippingCost > 0 ? `Frete: R$ ${finalShippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
+*Total:* R$ ${total.toFixed(2).replace('.', ',')} (${shippingCost > 0 ? `Frete: R$ ${shippingCost.toFixed(2).replace('.', ',')}` : 'FRETE GRÁTIS'})
 
 *Endereço:*
 ${formData.street}, ${formData.number} ${formData.complement ? `(${formData.complement})` : ''}
@@ -245,10 +245,10 @@ ${itemDetails}
               </div>
               <div className="flex justify-between text-zinc-400">
                 <span>Frete</span>
-                {finalShippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
+                {shippingCost === 0 && subtotal >= FREE_SHIPPING_THRESHOLD ? (
                     <span className="text-green-400 font-bold">GRÁTIS!</span>
                 ) : (
-                    <span>R$ {finalShippingCost.toFixed(2)}</span>
+                    <span>R$ {shippingCost.toFixed(2)}</span>
                 )}
               </div>
               <div className="flex justify-between text-lg font-bold text-white pt-2">
@@ -267,13 +267,13 @@ ${itemDetails}
             <button
               type="submit"
               form="checkout-form"
-              disabled={loading || baseShippingCost === 0 && cep.length < 8} // Usa baseShippingCost
+              disabled={loading || shippingCost === 0 && cep.length < 8} 
               className="w-full mt-6 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 text-white font-bold py-3 rounded transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? <Loader2 className="animate-spin" /> : "Finalizar Pedido e Pagar via WhatsApp/PIX"}
             </button>
             
-            {baseShippingCost === 0 && cep.length < 8 && (
+            {shippingCost === 0 && cep.length < 8 && (
               <p className="text-xs text-center text-zinc-500 mt-2">Digite o CEP para calcular o frete</p>
             )}
             
