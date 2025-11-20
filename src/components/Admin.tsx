@@ -10,7 +10,7 @@ export function Admin() {
   // ---------------------------
   
   // ⚠️ MUDAR ESTA SENHA AQUI PARA UMA SENHA FORTE!
-  const SENHA_MESTRA = "admin123"; 
+  const SENHA_MESTRA = "@Ravi0072006"; 
 
   const [tab, setTab] = useState<'products' | 'orders'>('products');
   const [products, setProducts] = useState<any[]>([]);
@@ -21,7 +21,8 @@ export function Admin() {
   const [productForm, setProductForm] = useState({
     name: '',
     price: '',
-    image: '',
+    // CORREÇÃO: Mudar 'image' para 'images_urls' que guarda todas as URLs
+    images_urls: '',
     category: 'Camisetas',
     gender: 'Unissex',
     sizes: 'P,M,G,GG',
@@ -84,11 +85,27 @@ export function Admin() {
 
   async function handleSaveProduct() {
     try {
+      // CORREÇÃO: 
+      // 1. Pega as URLs e divide por vírgula, removendo espaços e entradas vazias.
+      const imageArray = productForm.images_urls
+        .split(',')
+        .map(url => url.trim())
+        .filter(url => url !== ''); 
+
+      if (imageArray.length === 0) {
+        toast.error('Obrigatório adicionar pelo menos 1 URL de imagem.');
+        return;
+      }
+
       const productData = {
-        ...productForm,
+        // CORREÇÃO: Salva a primeira imagem como 'image' (para compatibilidade)
+        // e o array completo como 'images'
+        image: imageArray[0], 
+        images: imageArray,
         price: parseFloat(productForm.price),
         supplier_cost: parseFloat(productForm.supplier_cost) || 0,
         sizes: productForm.sizes.split(',').map(s => s.trim()),
+        supplier_link: productForm.supplier_link,
       };
 
       if (editingProduct) {
@@ -102,9 +119,9 @@ export function Admin() {
       setShowProductForm(false);
       setEditingProduct(null);
       setProductForm({
+        images_urls: '',
         name: '',
         price: '',
-        image: '',
         category: 'Camisetas',
         gender: 'Unissex',
         sizes: 'P,M,G,GG',
@@ -147,7 +164,8 @@ export function Admin() {
     setProductForm({
       name: product.name,
       price: product.price.toString(),
-      image: product.image,
+      // CORREÇÃO: Converte o array 'images' de volta para uma string separada por vírgula para edição
+      images_urls: (product.images || [product.image]).join(', '),
       category: product.category,
       gender: product.gender || 'Unissex',
       sizes: product.sizes.join(','),
@@ -306,7 +324,7 @@ export function Admin() {
                               step="0.01"
                               value={productForm.price}
                               onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                              className="w-full bg-zinc-800 border border-zinc-700 rounded px-4 py-2 focus:outline-none focus:border-amber-500"
+                              className="w-full bg-zinc-800 border border-zinc-700 rounded px-4 py-2 focus:outline-none focus:focus:border-amber-500"
                             />
                           </div>
                           <div>
@@ -320,16 +338,19 @@ export function Admin() {
                             />
                           </div>
                         </div>
+                        
+                        {/* NOVO CAMPO: Múltiplas Imagens */}
                         <div>
-                          <label className="block text-sm text-zinc-400 mb-2">URL da Imagem *</label>
+                          <label className="block text-sm text-zinc-400 mb-2">URLs das Imagens (separadas por vírgula) *</label>
                           <input
                             type="text"
-                            value={productForm.image}
-                            onChange={(e) => setProductForm({ ...productForm, image: e.target.value })}
-                            placeholder="https://..."
+                            value={productForm.images_urls}
+                            onChange={(e) => setProductForm({ ...productForm, images_urls: e.target.value })}
+                            placeholder="url_frente.png, url_costas.png, url_detalhe.jpg"
                             className="w-full bg-zinc-800 border border-zinc-700 rounded px-4 py-2 focus:outline-none focus:border-amber-500"
                           />
                         </div>
+                        
                         <div className="grid grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm text-zinc-400 mb-2">Categoria *</label>
@@ -403,8 +424,9 @@ export function Admin() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {products.map((product) => (
                     <div key={product.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+                      {/* O ProductCard VAI SABER SE É 'image' (string) ou 'images' (array) */}
                       <img
-                        src={product.image}
+                        src={(product.images && product.images.length > 0) ? product.images[0] : (product.image as string)}
                         alt={product.name}
                         className="w-full h-48 object-cover rounded mb-3"
                       />
