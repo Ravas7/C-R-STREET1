@@ -10,7 +10,7 @@ export function Admin() {
   // ---------------------------
   
   // ⚠️ MUDAR ESTA SENHA AQUI PARA UMA SENHA FORTE!
-  const SENHA_MESTRA = "@Ravi0072006"; 
+  const SENHA_MESTRA = "admin123"; 
 
   const [tab, setTab] = useState<'products' | 'orders'>('products');
   const [products, setProducts] = useState<any[]>([]);
@@ -21,8 +21,8 @@ export function Admin() {
   const [productForm, setProductForm] = useState({
     name: '',
     price: '',
-    // CORREÇÃO: Mudar 'image' para 'images_urls' que guarda todas as URLs
-    images_urls: '',
+    // CORRIGIDO: Agora usamos 'images_urls'
+    images_urls: '', 
     category: 'Camisetas',
     gender: 'Unissex',
     sizes: 'P,M,G,GG',
@@ -83,29 +83,39 @@ export function Admin() {
     }
   }
 
+  // CORRIGIDO: Lógica de Salvamento e Criação do Array de URLs
   async function handleSaveProduct() {
+    // Verifica campos obrigatórios
+    if (!productForm.name || !productForm.price || !productForm.images_urls || !productForm.sizes) {
+      toast.error('Por favor, preencha todos os campos obrigatórios (*).');
+      return;
+    }
+    
     try {
-      // CORREÇÃO: 
-      // 1. Pega as URLs e divide por vírgula, removendo espaços e entradas vazias.
+      // 1. Cria o array de imagens e filtra entradas vazias
       const imageArray = productForm.images_urls
         .split(',')
         .map(url => url.trim())
-        .filter(url => url !== ''); 
-
+        .filter(url => url.length > 0); 
+        
       if (imageArray.length === 0) {
         toast.error('Obrigatório adicionar pelo menos 1 URL de imagem.');
         return;
       }
-
+      
       const productData = {
-        // CORREÇÃO: Salva a primeira imagem como 'image' (para compatibilidade)
-        // e o array completo como 'images'
+        // Envia a primeira URL para o campo 'image' (para compatibilidade com o App.tsx)
         image: imageArray[0], 
-        images: imageArray,
+        // Envia todas as URLs como 'images' (para a galeria)
+        images: imageArray, 
+        
+        name: productForm.name,
         price: parseFloat(productForm.price),
         supplier_cost: parseFloat(productForm.supplier_cost) || 0,
         sizes: productForm.sizes.split(',').map(s => s.trim()),
         supplier_link: productForm.supplier_link,
+        category: productForm.category,
+        gender: productForm.gender,
       };
 
       if (editingProduct) {
@@ -131,7 +141,8 @@ export function Admin() {
       loadData();
     } catch (error) {
       console.error('Error saving product:', error);
-      toast.error('Erro ao salvar produto');
+      // O erro real pode ser do Supabase rejeitando o array
+      toast.error('Erro ao salvar produto. Verifique as URLs e o formato do Supabase.'); 
     }
   }
 
@@ -159,13 +170,18 @@ export function Admin() {
     }
   }
 
+  // CORRIGIDO: Lógica de Edição para mostrar as URLs
   function handleEditProduct(product: any) {
     setEditingProduct(product);
+    // Converte o array 'images' de volta para uma string separada por vírgula para edição
+    const urlsToEdit = (product.images && product.images.length > 0) 
+        ? product.images.join(', ')
+        : (product.image || ''); // Usa a imagem principal se o array 'images' não existir
+        
     setProductForm({
       name: product.name,
       price: product.price.toString(),
-      // CORREÇÃO: Converte o array 'images' de volta para uma string separada por vírgula para edição
-      images_urls: (product.images || [product.image]).join(', '),
+      images_urls: urlsToEdit,
       category: product.category,
       gender: product.gender || 'Unissex',
       sizes: product.sizes.join(','),
@@ -339,7 +355,7 @@ export function Admin() {
                           </div>
                         </div>
                         
-                        {/* NOVO CAMPO: Múltiplas Imagens */}
+                        {/* CAMPO: Múltiplas Imagens */}
                         <div>
                           <label className="block text-sm text-zinc-400 mb-2">URLs das Imagens (separadas por vírgula) *</label>
                           <input
@@ -424,7 +440,7 @@ export function Admin() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {products.map((product) => (
                     <div key={product.id} className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
-                      {/* O ProductCard VAI SABER SE É 'image' (string) ou 'images' (array) */}
+                      {/* Mostrar a primeira imagem ou a imagem principal */}
                       <img
                         src={(product.images && product.images.length > 0) ? product.images[0] : (product.image as string)}
                         alt={product.name}
